@@ -23,7 +23,7 @@ class ElevatedButtonWidget extends StatelessWidget {
       height: 50,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Colors.indigo,
           borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
@@ -47,7 +47,7 @@ class ElevatedButtonWidget extends StatelessWidget {
           ),
           child: Text(
             title,
-            style: TextStyle(color: textColor),
+            style: TextStyle(color: Colors.white),
           ),
         ),
       ),

@@ -16,7 +16,7 @@ class QuizScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     screenSize.init(context: context);
     return Scaffold(
-      appBar: AppBar(title: const Text("Quiz Screen")),
+      appBar: AppBar(title: const Text("Quiz Screen", style: TextStyle(color: Colors.white),), backgroundColor: Colors.indigo,leading: IconButton(onPressed: (){Navigator.pop(context);}, icon: Icon(Icons.arrow_back_ios)),),
       body: GetBuilder<QuestionController>(
         // Pass questions to controller on initialization
         init: QuestionController(questions: questions),
@@ -30,7 +30,7 @@ class QuizScreen extends StatelessWidget {
                     Container(
                       height: screenSize.screenHeight * .23,
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
+                        color: Colors.indigo,
                         borderRadius: const BorderRadius.vertical(
                           bottom: Radius.circular(20),
                         ),
