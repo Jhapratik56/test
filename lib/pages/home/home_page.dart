@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:quiz_khel/QuizParser.dart';
-import 'package:quiz_khel/QuizScreen.dart';
 import 'package:quiz_khel/imagepickerservice.dart';
 import 'package:quiz_khel/models/question.dart';
+import 'package:quiz_khel/pages/quiz/quiz_screen.dart';
 import 'package:quiz_khel/playbytopicscreen.dart';
 import 'package:quiz_khel/services/a4fservice.dart';
 import 'package:quiz_khel/textrecognitionservice.dart';
