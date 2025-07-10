@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "95589031508",
+    "project_id": "quiz-khel",
+    "storage_bucket": "quiz-khel.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:95589031508:android:25c39094aabf71733797c1",
+        "android_client_info": {
+          "package_name": "com.example.quiz_khel"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEpZ9trIQDjU5a4P2gl4S4JeO0lk3zLV8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
