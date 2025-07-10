@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:quiz_khel/pages/home/home_page.dart';
 import 'package:quiz_khel/services/auth_services.dart';
-import '../home_page.dart';
 import 'login_page.dart';
 
 class SignupPage extends StatefulWidget {
