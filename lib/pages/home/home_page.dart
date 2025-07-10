@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:quiz_khel/QuizParser.dart';
 import 'package:quiz_khel/QuizScreen.dart';
-import 'package:quiz_khel/a4fservice.dart';
+import 'package:quiz_khel/services/a4fservice.dart';
 import 'package:quiz_khel/imagepickerservice.dart';
 import 'package:quiz_khel/models/question.dart';
 import 'package:quiz_khel/playbytopicscreen.dart';
@@ -60,40 +60,43 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _processPDF() async {
-  final pdfFile = await PDFPickerService().pickPDF();
-  if (pdfFile == null) return;
+    final pdfFile = await PDFPickerService().pickPDF();
+    if (pdfFile == null) return;
 
-  setState(() => loading = true);
+    setState(() => loading = true);
 
-  try {
-    final text = await PDFTextExtractor().extractText(pdfFile);
+    try {
+      final text = await PDFTextExtractor().extractText(pdfFile);
 
-    if (text.trim().isEmpty) {
-      _showSnackBar("No text found in the PDF.");
-      return;
+      if (text.trim().isEmpty) {
+        _showSnackBar("No text found in the PDF.");
+        return;
+      }
+
+      final rawMCQs = await _a4fService.generateMCQs(text);
+      final questions = QuizParser.parseMCQs(rawMCQs);
+
+      if (questions.isNotEmpty) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => QuizScreen(questions: questions),
+          ),
+        );
+      } else {
+        _showSnackBar("No MCQs generated from this PDF.");
+      }
+    } catch (e) {
+      _showSnackBar("Error: ${e.toString()}");
+    } finally {
+      setState(() => loading = false);
     }
-
-    final rawMCQs = await _a4fService.generateMCQs(text);
-    final questions = QuizParser.parseMCQs(rawMCQs);
-
-    if (questions.isNotEmpty) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => QuizScreen(questions: questions)),
-      );
-    } else {
-      _showSnackBar("No MCQs generated from this PDF.");
-    }
-  } catch (e) {
-    _showSnackBar("Error: ${e.toString()}");
-  } finally {
-    setState(() => loading = false);
   }
-}
-
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -139,7 +142,7 @@ class _HomePageState extends State<HomePage> {
                       label: const Text("Play by Topic"),
                     ),
                     //const SizedBox(height: 16),
-                   /* ElevatedButton.icon(
+                    /* ElevatedButton.icon(
                       onPressed: () {
                         Navigator.push(
                           context,
