@@ -25,16 +25,17 @@ class _SharedQuizScreenState extends State<SharedQuizScreen> {
   int? selectedOptionIndex;
   bool answered = false;
   Timer? countdownTimer;
-  int countdown = 20;
+  int countdown = 15;
 
   Set<String> answeredUsers = {};
   List<String> teamMembers = [];
+  Map<String, int> scores = {}; // userId -> score
 
   @override
   void initState() {
     super.initState();
-    startCountdown();
     _fetchTeamMembers();
+    startCountdown();
   }
 
   @override
@@ -45,7 +46,7 @@ class _SharedQuizScreenState extends State<SharedQuizScreen> {
 
   void startCountdown() {
     countdownTimer?.cancel();
-    countdown = 20;
+    countdown = 15;
     countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (countdown == 0) {
         timer.cancel();
@@ -81,11 +82,37 @@ class _SharedQuizScreenState extends State<SharedQuizScreen> {
       answered = true;
     });
 
-    await FirebaseFirestore.instance
-        .collection('sessions')
-        .doc(widget.teamCode)
-        .set({
-      'answers': {widget.userId: index}
+    final sessionDoc = FirebaseFirestore.instance.collection('sessions').doc(widget.teamCode);
+    final sessionSnapshot = await sessionDoc.get();
+
+    Map<String, dynamic> data = {};
+    if (sessionSnapshot.exists && sessionSnapshot.data() != null) {
+      data = sessionSnapshot.data()! as Map<String, dynamic>;
+    }
+
+    final currentQuestion = questions.isNotEmpty && currentIndex < questions.length
+        ? questions[currentIndex]
+        : null;
+
+    // Get current scores or initialize empty
+    Map<String, dynamic> currentScores = {};
+    if (data.containsKey('scores')) {
+      currentScores = Map<String, dynamic>.from(data['scores']);
+    }
+
+    int previousScore = currentScores[widget.userId] ?? 0;
+    int newScore = previousScore;
+
+    // Increase score if answer is correct
+    if (currentQuestion != null && index == currentQuestion.correctIndex) {
+      newScore += 1;
+    }
+    currentScores[widget.userId] = newScore;
+
+    // Update answers and scores atomically in Firestore
+    await sessionDoc.set({
+      'answers': {widget.userId: index},
+      'scores': currentScores,
     }, SetOptions(merge: true));
   }
 
@@ -101,7 +128,7 @@ class _SharedQuizScreenState extends State<SharedQuizScreen> {
     setState(() {
       selectedOptionIndex = null;
       answered = false;
-      countdown = 20;
+      countdown = 15;
       answeredUsers.clear();
     });
 
@@ -109,8 +136,7 @@ class _SharedQuizScreenState extends State<SharedQuizScreen> {
   }
 
   bool get allAnswered {
-    return teamMembers.isNotEmpty &&
-        answeredUsers.length >= teamMembers.length;
+    return teamMembers.isNotEmpty && answeredUsers.length >= teamMembers.length;
   }
 
   @override
@@ -136,8 +162,8 @@ class _SharedQuizScreenState extends State<SharedQuizScreen> {
 
           final data = doc.data() as Map<String, dynamic>;
 
-          if (data['questions'] == null || data['questions'].isEmpty) {
-            return const Center(child: Text("No questions found."));
+          if (!data.containsKey('questions') || data['questions'] == null || data['questions'].isEmpty) {
+            return const Center(child: Text("Waiting for host to start quiz..."));
           }
 
           final questionsData = data['questions'] as List<dynamic>;
@@ -148,36 +174,60 @@ class _SharedQuizScreenState extends State<SharedQuizScreen> {
           currentIndex = data['currentIndex'] ?? 0;
 
           if (currentIndex >= questions.length) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("Quiz completed!", style: TextStyle(fontSize: 24)),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("Exit"),
-                  ),
-                ],
+            // Show final scoreboard after quiz completion
+            final finalScores = Map<String, dynamic>.from(data['scores'] ?? {});
+            return Scaffold(
+              appBar: AppBar(title: const Text("Quiz Completed!")),
+              body: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    const Text("Quiz completed!", style: TextStyle(fontSize: 24)),
+                    const SizedBox(height: 20),
+                    Expanded(
+                      child: ListView(
+                        children: teamMembers.map((memberId) {
+                          final score = finalScores[memberId] ?? 0;
+                          return ListTile(
+                            title: Text("User: $memberId"),
+                            trailing: Text("Score: $score"),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Exit"),
+                    ),
+                  ],
+                ),
               ),
             );
           }
 
           final question = questions[currentIndex];
 
-          // Read who has answered
           final answersMap = Map<String, dynamic>.from(data['answers'] ?? {});
           answeredUsers = answersMap.keys.toSet();
 
           if (answersMap.containsKey(widget.userId)) {
             selectedOptionIndex = answersMap[widget.userId];
             answered = true;
+          } else {
+            selectedOptionIndex = null;
+            answered = false;
           }
+
+          // Get scores for showing scoreboard
+          final scoresData = Map<String, dynamic>.from(data['scores'] ?? {});
+          scores = scoresData.map((key, value) => MapEntry(key, (value as int)));
 
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Question info and timer
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -197,6 +247,7 @@ class _SharedQuizScreenState extends State<SharedQuizScreen> {
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 20),
+                // Options
                 ...List.generate(question.options.length, (i) {
                   final option = question.options[i];
                   final isSelected = selectedOptionIndex == i;
@@ -226,6 +277,7 @@ class _SharedQuizScreenState extends State<SharedQuizScreen> {
                   );
                 }),
                 const SizedBox(height: 24),
+                // Next Question button for host only
                 if (widget.isHost && currentIndex < questions.length - 1)
                   ElevatedButton(
                     onPressed: allAnswered ? _goToNextQuestion : null,
@@ -233,6 +285,23 @@ class _SharedQuizScreenState extends State<SharedQuizScreen> {
                         ? "Next Question"
                         : "Waiting for all members to answer"),
                   ),
+
+                const Divider(height: 32),
+
+                // Scoreboard
+                Text("Scoreboard:", style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView(
+                    children: teamMembers.map((memberId) {
+                      final score = scores[memberId] ?? 0;
+                      return ListTile(
+                        title: Text("User: $memberId"),
+                        trailing: Text("Score: $score"),
+                      );
+                    }).toList(),
+                  ),
+                ),
               ],
             ),
           );

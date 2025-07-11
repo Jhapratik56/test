@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quiz_khel/services/a4fservice.dart';
 import 'QuizParser.dart';
 import 'models/question.dart';
-import 'QuizScreen.dart';
-
+import 'package:quiz_khel/pages/quiz/quiz_screen.dart';
 class PlayByTopicScreen extends StatefulWidget {
   const PlayByTopicScreen({super.key});
 

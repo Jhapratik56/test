@@ -52,9 +52,9 @@ class _LoginPageState extends State<LoginPage> {
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(result)));
         }
       }
     }
@@ -64,10 +64,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('Login'),
-        backgroundColor: Colors.indigo,
-      ),
+      appBar: AppBar(),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -80,14 +77,14 @@ class _LoginPageState extends State<LoginPage> {
                 children: [
                   Text(
                     'Login',
-                    
+
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                     textAlign: TextAlign.center,
                   ),
-                                    const SizedBox(height: 8),
+                  const SizedBox(height: 20),
 
                   // Email
                   TextFormField(
@@ -102,15 +99,17 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       filled: true,
-                      fillColor:
-                          Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      fillColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceVariant.withOpacity(0.3),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                          .hasMatch(value)) {
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -135,14 +134,17 @@ class _LoginPageState extends State<LoginPage> {
                               : Icons.visibility_outlined,
                         ),
                         onPressed: _togglePasswordVisibility,
-                        tooltip: _isPasswordVisible ? 'Hide password' : 'Show password',
+                        tooltip: _isPasswordVisible
+                            ? 'Hide password'
+                            : 'Show password',
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                       filled: true,
-                      fillColor:
-                          Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      fillColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceVariant.withOpacity(0.3),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
@@ -174,7 +176,9 @@ class _LoginPageState extends State<LoginPage> {
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
                         : const Text(
@@ -195,14 +199,16 @@ class _LoginPageState extends State<LoginPage> {
                       Text(
                         "Don't have an account? ",
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       TextButton(
                         onPressed: () {
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (_) => const SignupPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const SignupPage(),
+                            ),
                           );
                         },
                         child: Text(

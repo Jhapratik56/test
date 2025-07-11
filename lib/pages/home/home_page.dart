@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';  // added
 import 'package:quiz_khel/QuizParser.dart';
-import 'package:quiz_khel/QuizScreen.dart';
-import 'package:quiz_khel/services/a4fservice.dart';
 import 'package:quiz_khel/imagepickerservice.dart';
 import 'package:quiz_khel/models/question.dart';
+import 'package:quiz_khel/pages/quiz/quiz_screen.dart';
 import 'package:quiz_khel/playbytopicscreen.dart';
+import 'package:quiz_khel/services/a4fservice.dart';
 import 'package:quiz_khel/textrecognitionservice.dart';
 import 'package:quiz_khel/pdf_text_extractor.dart';
 import 'package:quiz_khel/pdf_picker_service.dart';

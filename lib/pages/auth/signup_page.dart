@@ -55,9 +55,9 @@ class _SignupPageState extends State<SignupPage> {
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(result)));
         }
       }
     }
@@ -67,10 +67,7 @@ class _SignupPageState extends State<SignupPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('Sign Up'),
-        backgroundColor: Colors.indigo,
-      ),
+      appBar: AppBar(),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -85,17 +82,17 @@ class _SignupPageState extends State<SignupPage> {
                   Text(
                     'Create Account',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Sign up to get started',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
@@ -112,8 +109,9 @@ class _SignupPageState extends State<SignupPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       filled: true,
-                      fillColor:
-                          Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      fillColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceVariant.withOpacity(0.3),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
@@ -137,15 +135,17 @@ class _SignupPageState extends State<SignupPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       filled: true,
-                      fillColor:
-                          Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      fillColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceVariant.withOpacity(0.3),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                          .hasMatch(value)) {
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -170,14 +170,17 @@ class _SignupPageState extends State<SignupPage> {
                               : Icons.visibility_outlined,
                         ),
                         onPressed: _togglePasswordVisibility,
-                        tooltip: _isPasswordVisible ? 'Hide password' : 'Show password',
+                        tooltip: _isPasswordVisible
+                            ? 'Hide password'
+                            : 'Show password',
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                       filled: true,
-                      fillColor:
-                          Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      fillColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceVariant.withOpacity(0.3),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
@@ -209,7 +212,9 @@ class _SignupPageState extends State<SignupPage> {
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
                         : const Text(
@@ -230,14 +235,16 @@ class _SignupPageState extends State<SignupPage> {
                       Text(
                         "Already have an account? ",
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       TextButton(
                         onPressed: () {
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (_) => const LoginPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const LoginPage(),
+                            ),
                           );
                         },
                         child: Text(
