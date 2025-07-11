@@ -57,19 +57,35 @@ class Option extends StatelessWidget {
               ],
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Numbered prefix
                 Text(
-                  "${index + 1}. $text",
+                  "${index + 1}. ",
                   style: TextStyle(
                     color: getTheRightColor(),
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+
+                // Flexible text for long content
+                Expanded(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      color: getTheRightColor(),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+
+                // Correct/Incorrect icon
                 Container(
                   height: 26,
                   width: 26,
+                  margin: const EdgeInsets.only(left: 10),
                   decoration: BoxDecoration(
                     color: getTheRightColor() == Colors.grey
                         ? Colors.transparent

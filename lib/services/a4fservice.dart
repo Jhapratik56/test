@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class A4FService {
-  final String _apiKey = 'ddc-a4f-baa45fbc18684a0f80773cd0d2c39459';
-  final String _apiUrl = 'https://api.a4f.co/v1/chat/completions';
+  final String _apiKey = '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';
+  final String _apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
 
   Future<String> generateMCQs(String input, {bool isTopicOnly = false}) async {
     final promptText = isTopicOnly
@@ -19,7 +19,7 @@ class A4FService {
         'Authorization': 'Bearer $_apiKey',
       },
       body: jsonEncode({
-        "model": "provider-2/gpt-3.5-turbo",
+        "model": "openai/gpt-4.1-mini",
         "messages": [
           {
             "role": "system",
