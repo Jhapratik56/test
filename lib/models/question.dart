@@ -8,4 +8,18 @@ class Question {
     required this.options,
     required this.correctIndex,
   });
+
+  // ✅ Convert to map (for Firestore)
+  Map<String, dynamic> toMap() => {
+    'question': question,
+    'options': options,
+    'correctIndex': correctIndex,
+  };
+
+  // ✅ Convert from Firestore map
+  factory Question.fromMap(Map<String, dynamic> map) => Question(
+    question: map['question'],
+    options: List<String>.from(map['options']),
+    correctIndex: map['correctIndex'],
+  );
 }

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';  // added
 import 'package:quiz_khel/QuizParser.dart';
 import 'package:quiz_khel/QuizScreen.dart';
 import 'package:quiz_khel/services/a4fservice.dart';
@@ -10,10 +11,14 @@ import 'package:quiz_khel/playbytopicscreen.dart';
 import 'package:quiz_khel/textrecognitionservice.dart';
 import 'package:quiz_khel/pdf_text_extractor.dart';
 import 'package:quiz_khel/pdf_picker_service.dart';
-// import 'package:quiz_khel/team_code_screen.dart'; // Create this screen separately
+import 'package:quiz_khel/team_code/join_team_screen.dart';
+import 'package:quiz_khel/team_code/create_team_screen.dart';
+import 'package:quiz_khel/team_code/shared_quiz_screen.dart'; // added
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String? teamCode; // optional teamCode for session syncing
+
+  const HomePage({super.key, this.teamCode});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -43,12 +48,36 @@ class _HomePageState extends State<HomePage> {
       questions = QuizParser.parseMCQs(rawMCQs);
 
       if (questions.isNotEmpty) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => QuizScreen(questions: questions),
-          ),
-        );
+        if (widget.teamCode != null) {
+          // Save questions temporarily in Firestore for team session
+          await FirebaseFirestore.instance
+              .collection('sessions')
+              .doc(widget.teamCode)
+              .set({
+            'questions': questions.map((q) => q.toMap()).toList(),
+            'currentIndex': 0,
+            'started': true,
+          });
+
+          // Navigate to shared real-time quiz screen as host
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => SharedQuizScreen(
+                teamCode: widget.teamCode!,
+                isHost: true, userId: '',
+              ),
+            ),
+          );
+        } else {
+          // Solo mode, open normal quiz screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => QuizScreen(questions: questions),
+            ),
+          );
+        }
       } else {
         _showSnackBar("No valid questions generated.");
       }
@@ -77,12 +106,33 @@ class _HomePageState extends State<HomePage> {
       final questions = QuizParser.parseMCQs(rawMCQs);
 
       if (questions.isNotEmpty) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => QuizScreen(questions: questions),
-          ),
-        );
+        if (widget.teamCode != null) {
+          await FirebaseFirestore.instance
+              .collection('sessions')
+              .doc(widget.teamCode)
+              .set({
+            'questions': questions.map((q) => q.toMap()).toList(),
+            'currentIndex': 0,
+            'started': true,
+          });
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => SharedQuizScreen(
+                teamCode: widget.teamCode!,
+                isHost: true, userId: '',
+              ),
+            ),
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => QuizScreen(questions: questions),
+            ),
+          );
+        }
       } else {
         _showSnackBar("No MCQs generated from this PDF.");
       }
@@ -141,19 +191,32 @@ class _HomePageState extends State<HomePage> {
                       icon: const Icon(Icons.topic),
                       label: const Text("Play by Topic"),
                     ),
-                    //const SizedBox(height: 16),
-                    /* ElevatedButton.icon(
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.group_add),
+                      label: const Text('Create Team'),
                       onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const TeamCodeScreen(), // You must create this screen
+                            builder: (context) =>
+                                CreateTeamScreen(userId: 'your-user-id'),
                           ),
                         );
                       },
+                    ),
+                    ElevatedButton.icon(
                       icon: const Icon(Icons.group),
-                      label: const Text("Join with Team Code"),
-                    // ),*/
+                      label: const Text('Join Team'),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                JoinTeamScreen(userId: 'your-user-id'),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
