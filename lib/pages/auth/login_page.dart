@@ -84,7 +84,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: ),
+                  const SizedBox(height: 20),
 
                   // Email
                   TextFormField(
