@@ -1,10 +1,10 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:quiz_khel/models/question.dart';
 import 'package:quiz_khel/pages/quiz/score_screen.dart';
 
-class QuestionController extends GetxController with GetTickerProviderStateMixin {
+class QuestionController extends GetxController
+    with GetTickerProviderStateMixin {
   final List<Question> questions;
   QuestionController({required this.questions});
 
@@ -31,26 +31,43 @@ class QuestionController extends GetxController with GetTickerProviderStateMixin
   int _totalNumber = 0;
   int get totalNumber => _totalNumber;
 
-  RxInt skipNumber = 0.obs;
-  int get skipped => skipNumber.value;
+  late RxInt _skipNumber = 0.obs;
+  RxInt get skipNumber => _skipNumber;
 
   int get numOfCorrectAns => _score;
 
   @override
   void onInit() {
     super.onInit();
-    _animationController =
-        AnimationController(duration: const Duration(seconds: 30), vsync: this);
 
-    _animation = Tween<double>(begin: 500, end: 1000).animate(_animationController)
+    _animationController = AnimationController(
+      duration: const Duration(seconds: 30),
+      vsync: this,
+    );
+
+    _animation = Tween<double>(begin: 0, end: 1).animate(_animationController)
       ..addListener(() {
         update();
+      })
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          if (!_isAnswered) {
+            skipQuestion(); // only skip if no answer
+          }
+        }
       });
 
-    _animationController.forward().whenComplete(nextQuestion);
+    startTimer();
+  }
+
+  void startTimer() {
+    _animationController.reset();
+    _animationController.forward();
   }
 
   void checkAns(Question question, int selectedIndex) {
+    if (_isAnswered) return;
+
     _isAnswered = true;
     _correctAns = question.correctIndex;
     _selectedAns = selectedIndex;
@@ -68,23 +85,29 @@ class QuestionController extends GetxController with GetTickerProviderStateMixin
   }
 
   void nextQuestion() {
-    if (_questionNumber.value < questions.length) {
-      _isAnswered = false;
-      _selectedAns = null;
-      _questionNumber.value++;
-      _totalNumber++;
-      _animationController.reset();
-      _animationController.forward().whenComplete(nextQuestion);
-      update();
-    } else {
+    if (_questionNumber.value >= questions.length) {
       _animationController.stop();
-      Get.to(() => const ScoreScreen());
+      Get.off(() => const ScoreScreen()); // replace route instead of stacking
+      return;
     }
+
+    _isAnswered = false;
+    _selectedAns = null;
+    _correctAns = -1;
+
+    _questionNumber.value++;
+    _totalNumber++;
+
+    startTimer();
+    update();
   }
 
   void skipQuestion() {
-    skipNumber++;
-    _totalNumber++;
+    if (_isAnswered) return;
+    _isAnswered = true;
+    _selectedAns = null;
+    _correctAns = -1;
+    _skipNumber.value++;
     nextQuestion();
   }
 

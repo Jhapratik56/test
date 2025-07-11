@@ -1,311 +1,399 @@
-import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'package:quiz_khel/QuizParser.dart';
 import 'package:quiz_khel/models/question.dart';
+import 'package:quiz_khel/imagepickerservice.dart';
+import 'package:quiz_khel/textrecognitionservice.dart';
+import 'package:quiz_khel/pdf_text_extractor.dart';
+import 'package:quiz_khel/pdf_picker_service.dart';
+import 'package:quiz_khel/services/a4fservice.dart';
 
-class SharedQuizScreen extends StatefulWidget {
-  final String teamCode;
-  final bool isHost;
-  final String userId;
+import 'package:quiz_khel/pages/quiz/quiz_screen.dart';
+import 'package:quiz_khel/playbytopicscreen.dart';
+import 'package:quiz_khel/widgets/drawer.dart';
 
-  const SharedQuizScreen({
-    Key? key,
-    required this.teamCode,
-    required this.isHost,
-    required this.userId,
-  }) : super(key: key);
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
 
   @override
-  State<SharedQuizScreen> createState() => _SharedQuizScreenState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _SharedQuizScreenState extends State<SharedQuizScreen> {
-  List<Question> questions = [];
-  int currentIndex = 0;
-  int? selectedOptionIndex;
-  bool answered = false;
-  Timer? countdownTimer;
-  int countdown = 15;
+class _HomePageState extends State<HomePage> {
+  final A4FService _a4fService = A4FService();
+  final ImagePickerService _imagePicker = ImagePickerService();
+  final TextRecognitionService _textRecognizer = TextRecognitionService();
 
-  Set<String> answeredUsers = {};
-  List<String> teamMembers = [];
-  Map<String, int> scores = {}; // userId -> score
+  String username = "User";
+  bool loading = false;
+  List<Question> questions = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchTeamMembers();
-    startCountdown();
+    _loadUsername();
   }
 
-  @override
-  void dispose() {
-    countdownTimer?.cancel();
-    super.dispose();
-  }
-
-  void startCountdown() {
-    countdownTimer?.cancel();
-    countdown = 15;
-    countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (countdown == 0) {
-        timer.cancel();
-        if (widget.isHost && currentIndex < questions.length - 1) {
-          _goToNextQuestion();
-        }
-      } else {
+  Future<void> _loadUsername() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists && doc.data()!.containsKey('username')) {
         setState(() {
-          countdown--;
+          username = doc['username'];
         });
       }
-    });
-  }
-
-  Future<void> _fetchTeamMembers() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('teams')
-        .doc(widget.teamCode)
-        .get();
-
-    if (doc.exists && doc.data() != null) {
-      setState(() {
-        teamMembers = List<String>.from(doc['members'] ?? []);
-      });
     }
   }
 
-  Future<void> _selectOption(int index) async {
-    if (answered) return;
+  Future<void> _processImage(bool fromCamera) async {
+    final image = fromCamera
+        ? await _imagePicker.pickImageFromCamera()
+        : await _imagePicker.pickImageFromGallery();
 
-    setState(() {
-      selectedOptionIndex = index;
-      answered = true;
-    });
+    if (image == null) return;
 
-    final sessionDoc = FirebaseFirestore.instance.collection('sessions').doc(widget.teamCode);
-    final sessionSnapshot = await sessionDoc.get();
+    setState(() => loading = true);
 
-    Map<String, dynamic> data = {};
-    if (sessionSnapshot.exists && sessionSnapshot.data() != null) {
-      data = sessionSnapshot.data()! as Map<String, dynamic>;
+    try {
+      final extractedText = await _textRecognizer.recognizeTextFromImage(image);
+      final rawMCQs = await _a4fService.generateMCQs(extractedText);
+      questions = QuizParser.parseMCQs(rawMCQs);
+
+      if (questions.isNotEmpty) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => QuizScreen(questions: questions)));
+      } else {
+        _showSnackBar("No valid questions generated.");
+      }
+    } catch (e) {
+      _showSnackBar("Error: ${e.toString()}");
+    } finally {
+      setState(() => loading = false);
     }
-
-    final currentQuestion = questions.isNotEmpty && currentIndex < questions.length
-        ? questions[currentIndex]
-        : null;
-
-    // Get current scores or initialize empty
-    Map<String, dynamic> currentScores = {};
-    if (data.containsKey('scores')) {
-      currentScores = Map<String, dynamic>.from(data['scores']);
-    }
-
-    int previousScore = currentScores[widget.userId] ?? 0;
-    int newScore = previousScore;
-
-    // Increase score if answer is correct
-    if (currentQuestion != null && index == currentQuestion.correctIndex) {
-      newScore += 1;
-    }
-    currentScores[widget.userId] = newScore;
-
-    // Update answers and scores atomically in Firestore
-    await sessionDoc.set({
-      'answers': {widget.userId: index},
-      'scores': currentScores,
-    }, SetOptions(merge: true));
   }
 
-  Future<void> _goToNextQuestion() async {
-    await FirebaseFirestore.instance
-        .collection('sessions')
-        .doc(widget.teamCode)
-        .update({
-      'currentIndex': currentIndex + 1,
-      'answers': {},
-    });
+  Future<void> _processPDF() async {
+    final pdfFile = await PDFPickerService().pickPDF();
+    if (pdfFile == null) return;
 
-    setState(() {
-      selectedOptionIndex = null;
-      answered = false;
-      countdown = 15;
-      answeredUsers.clear();
-    });
+    setState(() => loading = true);
 
-    startCountdown();
+    try {
+      final text = await PDFTextExtractor().extractText(pdfFile);
+      if (text.trim().isEmpty) {
+        _showSnackBar("No text found in the PDF.");
+        return;
+      }
+
+      final rawMCQs = await _a4fService.generateMCQs(text);
+      final questions = QuizParser.parseMCQs(rawMCQs);
+
+      if (questions.isNotEmpty) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => QuizScreen(questions: questions)));
+      } else {
+        _showSnackBar("No MCQs generated from this PDF.");
+      }
+    } catch (e) {
+      _showSnackBar("Error: ${e.toString()}");
+    } finally {
+      setState(() => loading = false);
+    }
   }
 
-  bool get allAnswered {
-    return teamMembers.isNotEmpty && answeredUsers.length >= teamMembers.length;
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showTeamOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("Team Options", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text("Create Team"),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showCreateTeamDialog();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo,
+                  minimumSize: const Size.fromHeight(50),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.group_add),
+                label: const Text("Join Team"),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showJoinTeamDialog();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo,
+                  minimumSize: const Size.fromHeight(50),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showCreateTeamDialog() {
+    final _teamNameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Create Team"),
+        content: TextField(
+          controller: _teamNameController,
+          decoration: const InputDecoration(
+            labelText: "Team Name",
+            hintText: "Enter a team name",
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text("Cancel"),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: const Text("Create"),
+            onPressed: () {
+              Navigator.pop(context);
+              _showSnackBar("Team '${_teamNameController.text}' created.");
+              // TODO: Add Firestore logic
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showJoinTeamDialog() {
+    final _teamCodeController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Join Team"),
+        content: TextField(
+          controller: _teamCodeController,
+          decoration: const InputDecoration(
+            labelText: "Team Code",
+            hintText: "Enter team code to join",
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text("Cancel"),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            child: const Text("Join"),
+            onPressed: () {
+              Navigator.pop(context);
+              _showSnackBar("Joined team with code '${_teamCodeController.text}'");
+              // TODO: Add Firestore logic
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Team: ${widget.teamCode}'),
+      appBar: AppBar(title: const Text("Quiz Khel")),
+      drawer: const AppDrawer(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showTeamOptions,
+        backgroundColor: Colors.indigo,
+        child: const Icon(Icons.group),
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('sessions')
-            .doc(widget.teamCode)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final doc = snapshot.data;
-          if (doc == null || !doc.exists || doc.data() == null) {
-            return const Center(child: Text("Waiting for host to start quiz..."));
-          }
-
-          final data = doc.data() as Map<String, dynamic>;
-
-          if (!data.containsKey('questions') || data['questions'] == null || data['questions'].isEmpty) {
-            return const Center(child: Text("Waiting for host to start quiz..."));
-          }
-
-          final questionsData = data['questions'] as List<dynamic>;
-          questions = questionsData
-              .map((q) => Question.fromMap(q as Map<String, dynamic>))
-              .toList();
-
-          currentIndex = data['currentIndex'] ?? 0;
-
-          if (currentIndex >= questions.length) {
-            // Show final scoreboard after quiz completion
-            final finalScores = Map<String, dynamic>.from(data['scores'] ?? {});
-            return Scaffold(
-              appBar: AppBar(title: const Text("Quiz Completed!")),
-              body: Padding(
-                padding: const EdgeInsets.all(16),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Quiz completed!", style: TextStyle(fontSize: 24)),
                     const SizedBox(height: 20),
-                    Expanded(
+                    Text(
+                      'Hello, $username 👋',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[800],
+                          ),
+                    ),
+                    const SizedBox(height: 40),
+
+                    // Categories
+                    Text(
+                      'Quiz by Category',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[800],
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 120,
                       child: ListView(
-                        children: teamMembers.map((memberId) {
-                          final score = finalScores[memberId] ?? 0;
-                          return ListTile(
-                            title: Text("User: $memberId"),
-                            trailing: Text("Score: $score"),
-                          );
-                        }).toList(),
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          _buildCategoryCard('Science', Icons.science),
+                          _buildCategoryCard('History', Icons.history_edu),
+                          _buildCategoryCard('Math', Icons.calculate),
+                          _buildCategoryCard('Literature', Icons.menu_book),
+                        ],
                       ),
                     ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Exit"),
+                    const SizedBox(height: 40),
+
+                    // Upload section
+                    Text(
+                      'Scan Image for Quiz',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[800],
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildUploadButton(
+                            'Pick from Gallery',
+                            Icons.photo_library,
+                            () => _processImage(false),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildUploadButton(
+                            'Take a Photo',
+                            Icons.camera_alt,
+                            () => _processImage(true),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildUploadButton(
+                            'Upload PDF',
+                            Icons.picture_as_pdf,
+                            _processPDF,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildUploadButton(
+                            'Play by Topic',
+                            Icons.topic,
+                            () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const PlayByTopicScreen()));
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-            );
-          }
+            ),
+    );
+  }
 
-          final question = questions[currentIndex];
-
-          final answersMap = Map<String, dynamic>.from(data['answers'] ?? {});
-          answeredUsers = answersMap.keys.toSet();
-
-          if (answersMap.containsKey(widget.userId)) {
-            selectedOptionIndex = answersMap[widget.userId];
-            answered = true;
-          } else {
-            selectedOptionIndex = null;
-            answered = false;
-          }
-
-          // Get scores for showing scoreboard
-          final scoresData = Map<String, dynamic>.from(data['scores'] ?? {});
-          scores = scoresData.map((key, value) => MapEntry(key, (value as int)));
-
-          return Padding(
+  Widget _buildCategoryCard(String title, IconData icon) {
+    return Container(
+      width: 100,
+      margin: const EdgeInsets.only(right: 16),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        elevation: 2,
+        shadowColor: Colors.black.withOpacity(0.1),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _showSnackBar("Coming soon: $title quiz!"),
+          child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Question info and timer
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "Q${currentIndex + 1} / ${questions.length}",
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      "Time: $countdown s",
-                      style: const TextStyle(fontSize: 18, color: Colors.red),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  question.question,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-                // Options
-                ...List.generate(question.options.length, (i) {
-                  final option = question.options[i];
-                  final isSelected = selectedOptionIndex == i;
-                  final isCorrect = i == question.correctIndex;
-
-                  Color? tileColor;
-                  if (answered) {
-                    if (isSelected && isCorrect) {
-                      tileColor = Colors.green[300];
-                    } else if (isSelected && !isCorrect) {
-                      tileColor = Colors.red[300];
-                    } else if (!isSelected && isCorrect) {
-                      tileColor = Colors.green[100];
-                    }
-                  }
-
-                  return Card(
-                    color: tileColor,
-                    child: ListTile(
-                      title: Text(option),
-                      leading: Radio<int>(
-                        value: i,
-                        groupValue: selectedOptionIndex,
-                        onChanged: answered ? null : (val) => _selectOption(val!),
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(height: 24),
-                // Next Question button for host only
-                if (widget.isHost && currentIndex < questions.length - 1)
-                  ElevatedButton(
-                    onPressed: allAnswered ? _goToNextQuestion : null,
-                    child: Text(allAnswered
-                        ? "Next Question"
-                        : "Waiting for all members to answer"),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-
-                const Divider(height: 32),
-
-                // Scoreboard
-                Text("Scoreboard:", style: Theme.of(context).textTheme.headlineSmall),
+                  child: Icon(icon, color: Colors.indigo, size: 24),
+                ),
                 const SizedBox(height: 8),
-                Expanded(
-                  child: ListView(
-                    children: teamMembers.map((memberId) {
-                      final score = scores[memberId] ?? 0;
-                      return ListTile(
-                        title: Text("User: $memberId"),
-                        trailing: Text("Score: $score"),
-                      );
-                    }).toList(),
-                  ),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[700],
+                      ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
-          );
-        },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUploadButton(String title, IconData icon, VoidCallback onTap) {
+    return Material(
+      color: Colors.indigo,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 3,
+      shadowColor: Colors.indigo.withOpacity(0.3),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            children: [
+              Icon(icon, color: Colors.white, size: 28),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
